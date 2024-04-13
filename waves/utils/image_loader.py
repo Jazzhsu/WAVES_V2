@@ -6,7 +6,7 @@ class ImageLoader:
     """ Data loader class that loads images from a given path.
     """
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, n_images: int = None):
         self._path = path
 
         if not os.path.exists(path):
@@ -15,10 +15,11 @@ class ImageLoader:
         # TODO: Should we open to more image formats?
         self._image_files = sorted([ file for file in os.listdir(path) if file.endswith('.png') ])
         self._idx = 0
+        self._size = min(n_images, len(self._image_files)) if n_images is not None else n_images
 
 
     def __len__(self):
-        return len(self._image_files)
+        return len(self._image_files) if self._size is None else self._size
 
     def load_batch(self, batch_size: int) -> list[Image.Image]:
         """ Loads a batch of images and return.
@@ -41,12 +42,16 @@ class ImageLoader:
         """
         return self._idx != len(self)
 
-    def reset(self):
+    def reset(self, n_images: int = None):
         self._idx = 0
+        self._size = min(n_images, len(self._image_files)) if n_images is not None else n_images
 
-# Example use case
+""" Example use case
+
 if __name__ == '__main__':
     loader = ImageLoader('images/main/dalle3/tree_ring')
 
     while loader.has_next():
         print(loader.load_batch(2))
+
+"""
