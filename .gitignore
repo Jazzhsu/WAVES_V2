@@ -153,3 +153,4 @@ wandb
 # TODO: remove this when release!!
 image_data
 images
+test_image
