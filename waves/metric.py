@@ -2,8 +2,6 @@ import os
 import sys
 from enum import Flag
 
-# TODO: Fix the path!!
-sys.path.insert(0, '/mnt/d/WAVES/WAVES_V2/')
 import torch
 from transformers import logging
 import torch.multiprocessing as mp
@@ -12,7 +10,7 @@ import warnings
 from tqdm.auto import tqdm
 import dotenv
 
-from metrics import (
+from waves.metrics import (
     compute_fid,
     compute_image_distance_repeated,
     load_perceptual_models,
@@ -22,7 +20,7 @@ from metrics import (
     load_open_clip_model_preprocess_and_tokenizer,
     compute_clip_score,
 )
-from utils.image_loader import ImageLoader
+from waves.utils.image_loader import ImageLoader
 
 dotenv.load_dotenv(override=False)
 warnings.filterwarnings("ignore")
@@ -144,7 +142,7 @@ def _select_data_source(clean_imgs: ImageLoader, wm_imgs: ImageLoader, attack_im
     if option == DataOption.WATERMARKED_VS_ATTACKED:
         return (wm_imgs, attack_imgs)
 
-    raise ValueError(f'Unknown data option {option}.')
+    raise ValueError(f'Unknown data option {option.name}.')
 
 def generate_metrics(
     image_dir: str,
@@ -153,6 +151,7 @@ def generate_metrics(
     cmp_metric_data_source: DataOption = DataOption.WATERMARKED_VS_ATTACKED | DataOption.CLEAN_VS_WATERMARKED,
     self_metric_option: MetricOption = MetricOption.SET_SELF_METRICS,
     self_metric_data_source: DataOption = DataOption.WATERMARKED | DataOption.ATTACKED,
+    batch_size: int = 32,
 ):
     """ Generate selected metrics for selected data sets. This method serves as the main interface
     to calculate metrics.
@@ -164,9 +163,6 @@ def generate_metrics(
     attacked_imgs = ImageLoader(os.path.join(image_dir, PATH_ATTACKED))
 
     available_metrics = MetricOption.get_available_metrics()
-
-    # TODO: Put this in parameters?
-    batch_size = 2
 
     # Self metrics
     result = {}
@@ -211,6 +207,13 @@ if __name__ == "__main__":
     # images = distortions.apply_distortion(images, 'noise', 0.5)
     # for i, image in enumerate(images):
     #     image.save(f'test_image/attack_images/{i}.png')
+
+    """ Expected image source file structure:
+    test_image/
+        |- clean/       ... Folder that stores clean images
+        |- wm/          ... Folder that stores watermarked images
+        |- attacked/    ... Folder that stores attacked watermarked images
+    """
 
     """ Example use case. """
     print(generate_metrics('test_image/', TEST_PROMPT, self_metric_data_source=DataOption.NONE, cmp_metric_data_source=DataOption.WATERMARKED_VS_ATTACKED))

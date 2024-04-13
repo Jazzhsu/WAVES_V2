@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from PIL import Image
 from tqdm.auto import tqdm
-from utils import to_tensor
+from waves.utils import to_tensor
 from .lpips import LPIPS
 from .watson import LossProvider
 

@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
 import json
 
-from utils import to_tensor
+from waves.utils import to_tensor
 from .exp_utils import set_random_seed
 
 
