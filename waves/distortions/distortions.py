@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import io
 
-from utils import set_random_seed, to_tensor, to_pil
+from waves.utils import set_random_seed, to_tensor, to_pil
 
 
 distortion_strength_paras = dict(

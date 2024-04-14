@@ -66,6 +66,7 @@ def _cmp_metric(im_loader_1: ImageLoader, im_loader_2: ImageLoader, metric: Metr
     """ Metrics that evalulate the difference of two image sets.
 
     TODO: Documentation.
+    TODO: Fid implementation
     """
     if (len(im_loader_1) != len(im_loader_2)):
         raise ValueError(f'The size of the two image sets are different')

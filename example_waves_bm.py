@@ -1,6 +1,7 @@
 from PIL import Image
 from waves.watermarker import Watermarker, WatermarkerType
 from waves.waves_benchmark import WavesBenchmark
+from waves.attacks import AttackMethods
 import numpy as np
 
 """ A naive watermarking algorithm that marks the paints 200x200 block of the images white.
@@ -29,5 +30,7 @@ if __name__ == '__main__':
 
     wave_bm = WavesBenchmark(watermarker, image_src='images/', cache_folder='test_cache/')
     wave_bm.generate_wm_images()
+
+    wave_bm.generate_attack_images(AttackMethods.COMB_DIST_DEGRAD, strength=0.5)
 
     # More to be implemented.

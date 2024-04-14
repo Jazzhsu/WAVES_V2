@@ -4,6 +4,7 @@ from PIL import Image
 
 from waves.watermarker import Watermarker, WatermarkerType
 from waves.utils.image_loader import ImageLoader
+from waves import attacks
 
 WAVE_CACHE_DIR = 'waves/'
 
@@ -30,8 +31,8 @@ class WavesBenchmark:
         else:
             self._generate_in_process_wm(n_images)
 
-    def generate_attack_images(self, attacks):
-        ...
+    def generate_attack_images(self, attack: attacks.AttackMethods, strength: float):
+        attacks.attack(self._clean_img_dir, self._wm_img_dir, self._attack_img_dir, attack, strength)
 
     def _generate_post_process_wm(self, n_images: int = None):
         img_loader = ImageLoader(self._image_src, n_images=n_images)
