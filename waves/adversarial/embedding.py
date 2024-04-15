@@ -4,19 +4,19 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision.utils import save_image
 import torchvision.transforms as transforms
-from feature_extractors import (
+from .feature_extractors import (
     ResNet18Embedding,
     VAEEmbedding,
     ClipEmbedding,
     KLVAEEmbedding,
 )
 import argparse
-
+from tqdm import tqdm
 
 EPS_FACTOR = 1 / 255
 ALPHA_FACTOR = 0.05
 N_STEPS = 200
-BATCH_SIZE = 4
+BATCH_SIZE = 5
 
 
 def parse_arguments():
@@ -36,10 +36,14 @@ def parse_arguments():
     parsed_args = parser.parse_args()
     return parsed_args
 
+STRENGTH = [2, 4, 6, 8]
 
 def adv_emb_attack(
     wm_img_path, encoder, strength, output_path, device=torch.device("cuda:0")
 ):
+    strength = min(int(strength * len(STRENGTH)), len(STRENGTH) - 1)
+    strength = STRENGTH[strength]
+
     # check if the file/directory paths exist
     for path in [wm_img_path, output_path]:
         if not os.path.exists(path):
@@ -57,7 +61,8 @@ def adv_emb_attack(
     elif encoder == "sdxlvae":
         embedding_model = VAEEmbedding("stabilityai/sdxl-vae")
     elif encoder == "klvae16":
-        embedding_model = KLVAEEmbedding("kl-f16")
+        # embedding_model = KLVAEEmbedding("kl-f16")
+        raise ValueError(f'KL-VAE-F16 model is not ready currently')
     else:
         raise ValueError(f"Unsupported encoder: {encoder}")
     embedding_model = embedding_model.to(device)
@@ -174,7 +179,7 @@ class WarmupPGDEmbedding:
             assert False
 
         # PGD
-        for _ in range(self.steps):
+        for _ in tqdm(range(self.steps)):
             self.model.zero_grad()
             adv_images.requires_grad = True
             adv_embeddings = self.model(adv_images)

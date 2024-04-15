@@ -3,9 +3,10 @@ import os
 
 from PIL import Image
 
-from waves.utils.image_loader import ImageLoader
-from waves.distortions import distortions
-from waves.regeneration.regen import RegenDiffusionAttacker, VAEAttacker
+from .utils.image_loader import ImageLoader
+from .distortions import distortions
+from .regeneration.regen import RegenDiffusionAttacker, VAEAttacker
+from .adversarial.embedding import adv_emb_attack
 
 class AttackMethods(IntFlag):
     # Distortion attacks
@@ -27,7 +28,6 @@ class AttackMethods(IntFlag):
     REGEN_DIFF = auto()
     RINSE_2X_DIFF = auto()
     RINSE_4X_DIFF = auto()
-    SET_REGEN_DIFF = REGEN_DIFF | RINSE_2X_DIFF | RINSE_4X_DIFF
 
     # Adversarial embedding attack
     ADV_EMB_RESNET_18 = auto()
@@ -60,6 +60,14 @@ repeats = {
     AttackMethods.RINSE_4X_DIFF: 4,
 }
 
+adv_emb_map = {
+    AttackMethods.ADV_EMB_RESNET_18: 'resnet18',
+    AttackMethods.ADV_EMB_CLIP: 'clip',
+    AttackMethods.ADV_EMB_KLVAE_8: 'klvae8',
+    AttackMethods.ADV_EMB_SDXL_VAE: 'sdxlvae',
+    AttackMethods.ADV_EMB_KLVAE_16: 'klvae16',
+}
+
 # TODO: Find a better way to get batch size.
 DIST_BATCH_SIZE = 32
 
@@ -70,6 +78,12 @@ def _get_attacks(attacks: AttackMethods) -> list[AttackMethods]:
 
 def _is_distortion_attack(attack: AttackMethods):
     return attack in AttackMethods.COMB_DIST_ALL
+
+def _is_regen_diffution_attack(attack: AttackMethods):
+    return attack in AttackMethods.REGEN_DIFF | AttackMethods.RINSE_2X_DIFF | AttackMethods.RINSE_4X_DIFF
+
+def _is_adversarial_emb_attack(attack: AttackMethods):
+    return attack.name.startswith('ADV_EMB_')
 
 def _save_images(imgs: list[Image.Image], dir: str, start_idx: int):
     for i, img in enumerate(imgs):
@@ -95,7 +109,7 @@ def _regeneration_attack(wm_img_dir: str, out_dir: str, attack_method: AttackMet
     img_idx = 0
 
     regen_attacker = None
-    if attack_method in AttackMethods.SET_REGEN_DIFF:
+    if _is_regen_diffution_attack(attack_method):
         regen_attacker = RegenDiffusionAttacker(attack_strength, repeats[attack_method])
     else:
         regen_attacker = VAEAttacker(attack_strength)
@@ -111,10 +125,14 @@ def attack(clean_img_dir: str, wm_img_dir: str, out_dir: str, attack_method: Att
     # Restrict strength to [0.0, 1.0]
     attack_strength = min(1.0, max(0.0, attack_strength))
 
-    if attack_method in AttackMethods.COMB_DIST_ALL:
+    if _is_distortion_attack(attack_method):
         _distortion_attack(wm_img_dir, out_dir, _get_attacks(attack_method), attack_strength)
 
-    elif attack_method in (AttackMethods.REGEN_VAE | AttackMethods.SET_REGEN_DIFF):
+    elif attack_method == AttackMethods.REGEN_VAE or _is_regen_diffution_attack(attack_method):
         _regeneration_attack(wm_img_dir, out_dir, attack_method, attack_strength)
+
+    elif _is_adversarial_emb_attack(attack_method):
+        adv_emb_attack(wm_img_dir, adv_emb_map[attack_method], attack_strength, out_dir)
+
 
 

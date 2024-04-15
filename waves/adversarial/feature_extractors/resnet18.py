@@ -7,7 +7,7 @@ import torchvision.transforms.functional as TF
 class ResNet18Embedding(BaseEncoder):
     def __init__(self, layer):
         super().__init__()
-        original_model = models.resnet18(pretrained=True)
+        original_model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
         # Define normalization layers
         self.mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).cuda()
         self.std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).cuda()

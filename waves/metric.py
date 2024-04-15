@@ -10,7 +10,7 @@ import warnings
 from tqdm.auto import tqdm
 import dotenv
 
-from waves.metrics import (
+from .metrics import (
     compute_fid,
     compute_image_distance_repeated,
     load_perceptual_models,
@@ -20,7 +20,7 @@ from waves.metrics import (
     load_open_clip_model_preprocess_and_tokenizer,
     compute_clip_score,
 )
-from waves.utils.image_loader import ImageLoader
+from .utils.image_loader import ImageLoader
 
 dotenv.load_dotenv(override=False)
 warnings.filterwarnings("ignore")

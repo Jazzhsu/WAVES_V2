@@ -9,6 +9,8 @@ from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
 import numpy as np
 
+from ..watermarker import Watermarker
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Train surrogate watermark clasifier.")
@@ -90,7 +92,6 @@ def parse_arguments():
 
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
     return parsed_args
-
 
 def train_surrogate_classifier(args):
     # Data preprocessing/transformation

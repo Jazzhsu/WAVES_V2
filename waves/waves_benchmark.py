@@ -2,9 +2,9 @@ import os
 
 from PIL import Image
 
-from waves.watermarker import Watermarker, WatermarkerType
-from waves.utils.image_loader import ImageLoader
-from waves import attacks
+from .watermarker import Watermarker, WatermarkerType
+from .utils.image_loader import ImageLoader
+from . import attacks
 
 WAVE_CACHE_DIR = 'waves/'
 
@@ -21,6 +21,7 @@ class WavesBenchmark:
         self._clean_img_dir = os.path.join(img_cache_folder, 'clean/')
         self._wm_img_dir = os.path.join(img_cache_folder, 'wm/')
         self._attack_img_dir = os.path.join(img_cache_folder, 'attack/')
+        self._adv_attck_training_dir = os.path.join(img_cache_folder, 'adv_train/')
 
         # Create necessary cache directories.
         self._init_cache_folders()
