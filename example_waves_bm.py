@@ -31,6 +31,6 @@ if __name__ == '__main__':
     wave_bm = WavesBenchmark(watermarker, image_src='images/', cache_folder='test_cache/')
     wave_bm.generate_wm_images()
 
-    wave_bm.generate_attack_images(AttackMethods.COMB_DIST_DEGRAD, strength=0.5)
+    wave_bm.generate_attack_images(AttackMethods.REGEN_VAE, strength=1.0)
 
     # More to be implemented.

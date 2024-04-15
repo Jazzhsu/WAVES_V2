@@ -7,7 +7,7 @@ from waves import metric
     test_image/
         |- clean/       ... Folder that stores clean images
         |- wm/          ... Folder that stores watermarked images
-        |- attacked/    ... Folder that stores attacked watermarked images
+        |- attack/    ... Folder that stores attacked watermarked images
 
 There are some constrains to this function:
     - number of images in these folder are expected to be the same.
@@ -21,7 +21,7 @@ If the function is available to user when released, the constrains will be fixed
 """
 
 result = metric.generate_metrics(
-    'test_image/',
+    'test_cache/waves/',
     metric.TEST_PROMPT, # Subject to change
     self_metric_data_source=metric.DataOption.NONE,
     cmp_metric_data_source=metric.DataOption.WATERMARKED_VS_ATTACKED,

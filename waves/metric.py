@@ -60,7 +60,7 @@ class DataOption(Flag):
 
 PATH_CLEAN = 'clean/'
 PATH_WATERMARKED = 'wm/'
-PATH_ATTACKED = 'attacked/'
+PATH_ATTACKED = 'attack/'
 
 def _cmp_metric(im_loader_1: ImageLoader, im_loader_2: ImageLoader, metric: MetricOption, batch_size: int):
     """ Metrics that evalulate the difference of two image sets.
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     test_image/
         |- clean/       ... Folder that stores clean images
         |- wm/          ... Folder that stores watermarked images
-        |- attacked/    ... Folder that stores attacked watermarked images
+        |- attack/    ... Folder that stores attacked watermarked images
     """
 
     """ Example use case. """
