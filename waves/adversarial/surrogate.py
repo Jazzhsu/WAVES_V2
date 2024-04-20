@@ -8,7 +8,7 @@ from torchvision.utils import save_image
 from torchvision.models import resnet18
 from torchattacks.attack import Attack
 from torch.utils.data import Dataset, DataLoader
-
+import torchvision.transforms.functional as F
 
 EPS_FACTOR = 1 / 255
 ALPHA_FACTOR = 0.05
@@ -54,13 +54,14 @@ def parse_arguments():
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
     return parsed_args
 
+STRENGTH = [2, 4, 6, 8]
 
 def adv_surrogate_model_attack(
     data_path,
     model_path,
     strength,
     output_path,
-    target_label,
+    batch_size=64,
     warmup=True,
     device=torch.device("cuda:0"),
 ):
@@ -68,9 +69,9 @@ def adv_surrogate_model_attack(
     for path in [data_path, model_path, output_path]:
         if not os.path.exists(path):
             raise FileNotFoundError(f"The path does not exist: {path}")
-    # check if the target_label is in {0, 1}
-    if target_label not in {0, 1}:
-        raise ValueError("target_label must be 0 or 1.")
+
+    strength = min(int(strength * len(STRENGTH)), len(STRENGTH) - 1)
+    strength = STRENGTH[strength]
 
     # load surrogate model
     model = resnet18(pretrained=False)
@@ -82,7 +83,10 @@ def adv_surrogate_model_attack(
     print("Model loaded!")
 
     # load data
-    transform = transforms.ToTensor()
+    transform = transforms.Compose([
+        # transforms.Resize((256, 256)),
+        transforms.ToTensor(),
+    ])
     dataset = SimpleImageFolder(data_path, transform=transform)
     train_loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True
@@ -105,10 +109,7 @@ def adv_surrogate_model_attack(
         )
         for i, (images, image_paths) in enumerate(train_loader):
             images = images.to(device)
-            if target_label == 1:
-                target_labels = torch.ones(images.size(0), dtype=torch.long).to(device)
-            elif target_label == 0:
-                target_labels = torch.zeros(images.size(0), dtype=torch.long).to(device)
+            target_labels = 1 - model(images).argmax(dim=1)
 
             # Attack images
             images_adv = attack_warmup(images, target_labels, init_delta=None)
@@ -134,10 +135,7 @@ def adv_surrogate_model_attack(
     )
     for i, (images, image_paths) in enumerate(test_loader):
         images = images.to(device)
-        if target_label == 1:
-            target_labels = torch.ones(images.size(0), dtype=torch.long).to(device)
-        elif target_label == 0:
-            target_labels = torch.zeros(images.size(0), dtype=torch.long).to(device)
+        target_labels = 1 - model(images).argmax(dim=1)
 
         # PGD attack
         images_adv = attack(images, target_labels, init_delta=average_delta)

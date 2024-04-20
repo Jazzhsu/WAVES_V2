@@ -32,8 +32,8 @@ class WavesBenchmark:
         else:
             self._generate_in_process_wm(n_images)
 
-    def generate_attack_images(self, attack: attacks.AttackMethods, strength: float):
-        attacks.attack(self._clean_img_dir, self._wm_img_dir, self._attack_img_dir, attack, strength)
+    def generate_attack_images(self, attack: attacks.AttackMethods, strength: float, surrogate_model_path: str = None):
+        attacks.attack(self._wm_img_dir, self._attack_img_dir, attack, strength, surrogate_model_path)
 
     def _generate_post_process_wm(self, n_images: int = None):
         img_loader = ImageLoader(self._image_src, n_images=n_images)

@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 
 from ..watermarker import Watermarker
+from tqdm import tqdm
 
 
 def parse_arguments():
@@ -93,70 +94,70 @@ def parse_arguments():
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
     return parsed_args
 
-def train_surrogate_classifier(args):
+def train_surrogate_classifier(train_data_path, learning_rate, num_epochs, device, model_save_path, model_save_name):
     # Data preprocessing/transformation
     transform = transforms.Compose(
         [
-            transforms.Resize(args.image_size),
-            transforms.CenterCrop(args.image_size),
+            transforms.Resize((256, 256)),
+            # transforms.CenterCrop(args.image_size),
             transforms.ToTensor(),
         ]
     )
 
     # Load datasets
-    full_train_dataset = ImageFolder(args.train_data_path, transform=transform)
+    full_train_dataset = ImageFolder(train_data_path, transform=transform)
 
-    if args.train_size is not None and 0 < args.train_size < len(full_train_dataset):
-        indices = np.random.choice(
-            len(full_train_dataset), args.train_size, replace=False
-        )
-        train_dataset = torch.utils.data.Subset(full_train_dataset, indices)
-    else:
-        train_dataset = full_train_dataset
+    # if args.train_size is not None and 0 < args.train_size < len(full_train_dataset):
+    #     indices = np.random.choice(
+    #         len(full_train_dataset), args.train_size, replace=False
+    #     )
+    #     train_dataset = torch.utils.data.Subset(full_train_dataset, indices)
+    # else:
+    train_dataset = full_train_dataset
     train_loader = DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
+        batch_size=64,
         shuffle=True,
         num_workers=4,
         pin_memory=True,
     )
 
-    if args.do_eval:
-        valid_dataset = ImageFolder(args.test_data_path, transform=transform)
-        valid_loader = DataLoader(
-            valid_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True,
-        )
+    # if args.do_eval:
+    #     valid_dataset = ImageFolder(args.test_data_path, transform=transform)
+    #     valid_loader = DataLoader(
+    #         valid_dataset,
+    #         batch_size=args.batch_size,
+    #         shuffle=False,
+    #         num_workers=4,
+    #         pin_memory=True,
+    #     )
 
     print(f"Training on {len(train_dataset)} samples.")
 
     # Load pretrained ResNet18 and modify the final layer
     model = resnet18(pretrained=True)
 
-    if model.fc.out_features != args.num_class:
+    if model.fc.out_features != 2:
         # Modify the final layer only if the number of output features doesn't match
-        model.fc = nn.Linear(model.fc.in_features, args.num_class)
+        model.fc = nn.Linear(model.fc.in_features, 2)
 
-    model = model.to(args.device)
+    model = model.to(device)
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     best_val_accuracy = 0.0
     best_model_state = None
 
     # Training loop
-    for epoch in range(args.num_epochs):
+    for epoch in range(num_epochs):
         model.train()
         total_loss = 0.0
         total = 0
         correct = 0
-        for images, labels in train_loader:
-            images, labels = images.to(args.device), labels.to(args.device)
+        for images, labels in tqdm(train_loader):
+            images, labels = images.to(device), labels.to(device)
 
             # Forward pass
             outputs = model(images)
@@ -177,10 +178,10 @@ def train_surrogate_classifier(args):
         train_loss = total_loss / len(train_loader)
         train_accuracy = 100 * correct / total
         print(
-            f"Epoch [{epoch + 1}/{args.num_epochs}], Training Loss: {train_loss:.4f}, Training Accuracy: {train_accuracy:.2f}%"
+            f"Epoch [{epoch + 1}/{num_epochs}], Training Loss: {train_loss:.4f}, Training Accuracy: {train_accuracy:.2f}%"
         )
 
-        if args.do_eval:
+        if False:
             # Evaluation on the validation set
             model.eval()
             correct = 0
@@ -210,7 +211,7 @@ def train_surrogate_classifier(args):
     # Save the best model based on validation accuracy
     if best_model_state is not None:
         save_path_best = os.path.join(
-            args.model_save_path, args.model_save_name + ".pth"
+            model_save_path, model_save_name + ".pth"
         )
         torch.save(best_model_state, save_path_best)
         print(
@@ -218,7 +219,7 @@ def train_surrogate_classifier(args):
         )
     else:
         save_path_full = os.path.join(
-            args.model_save_path, args.model_save_name + ".pth"
+            model_save_path, model_save_name + ".pth"
         )
         torch.save(model.state_dict(), save_path_full)
         print(f"Entire model saved to {save_path_full}")

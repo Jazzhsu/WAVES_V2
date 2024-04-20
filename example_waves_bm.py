@@ -14,7 +14,7 @@ class MyWatermarker(Watermarker):
         wm_images = [ np.asarray(image.copy()) for image in images ]
 
         wm_images = np.asarray(wm_images)
-        wm_images[:, 400:600, 400:600, :] = 255
+        wm_images[:, 200:300, 200:300, :] = 255
 
         wm_images = [ Image.fromarray(im) for im in wm_images ]
         return images, wm_images
@@ -31,6 +31,6 @@ if __name__ == '__main__':
     wave_bm = WavesBenchmark(watermarker, image_src='images/', cache_folder='test_cache/')
     wave_bm.generate_wm_images()
 
-    wave_bm.generate_attack_images(AttackMethods.ADV_EMB_RESNET_18, strength=0.5)
+    wave_bm.generate_attack_images(AttackMethods.ADV_SURROGATE, strength=0.5, surrogate_model_path='exmaple_surrogate/test_model.pth')
 
     # More to be implemented.

@@ -1,5 +1,6 @@
 from enum import IntFlag, auto
 import os
+from typing import Optional
 
 from PIL import Image
 
@@ -7,6 +8,7 @@ from .utils.image_loader import ImageLoader
 from .distortions import distortions
 from .regeneration.regen import RegenDiffusionAttacker, VAEAttacker
 from .adversarial.embedding import adv_emb_attack
+from .adversarial.surrogate import adv_surrogate_model_attack
 
 class AttackMethods(IntFlag):
     # Distortion attacks
@@ -37,9 +39,7 @@ class AttackMethods(IntFlag):
     ADV_EMB_KLVAE_8 = auto()
 
     # Adversarial surrogate attack
-    ADV_CLS_UNWM_WM = auto()
-    ADV_CLS_REAL_WM = auto()
-    ADV_CLS_WM1_WM2 = auto()
+    ADV_SURROGATE = auto()
 
 # TODO: This is a temporary solution to match the AttackMethod flag to strings in distortion.py.
 # Fix it later.
@@ -121,7 +121,7 @@ def _regeneration_attack(wm_img_dir: str, out_dir: str, attack_method: AttackMet
         _save_images(images, out_dir, img_idx)
         img_idx += len(images)
 
-def attack(clean_img_dir: str, wm_img_dir: str, out_dir: str, attack_method: AttackMethods, attack_strength: float):
+def attack(wm_img_dir: str, out_dir: str, attack_method: AttackMethods, attack_strength: float, surrogate_model_path: Optional[str] = None):
     # Restrict strength to [0.0, 1.0]
     attack_strength = min(1.0, max(0.0, attack_strength))
 
@@ -133,6 +133,12 @@ def attack(clean_img_dir: str, wm_img_dir: str, out_dir: str, attack_method: Att
 
     elif _is_adversarial_emb_attack(attack_method):
         adv_emb_attack(wm_img_dir, adv_emb_map[attack_method], attack_strength, out_dir)
+
+    elif attack_method == AttackMethods.ADV_SURROGATE:
+        adv_surrogate_model_attack(wm_img_dir, model_path=surrogate_model_path, strength=attack_strength, output_path=out_dir)
+
+    else:
+        raise ValueError(f'Unknown attack: {attack_method}.')
 
 
 
