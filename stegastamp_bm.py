@@ -26,7 +26,7 @@ class StegaStamp(Watermarker):
     def encode(
         self, 
         images: torch.Tensor, 
-        prompts: list[str], 
+        prompts: list[str],
         messages: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         secret = messages.numpy().astype(np.float32)

@@ -61,16 +61,14 @@ class WavesBenchmark:
         message_dict = {}
 
         bar = tqdm(total=len(image_data))
-        for imgs, img_names in loader:
-            for i in range(8):
-                names = [ f'{n}_{i}' for n in img_names ]
-                messages = self._watermarker.generate_messages(len(img_names))
-                _, wm_imgs = self._watermarker.encode(imgs, prompts=[], messages=messages)
+        for imgs, img_names, _ in loader:
+            messages = self._watermarker.generate_messages(len(img_names))
+            _, wm_imgs = self._watermarker.encode(imgs, prompts=[], messages=messages)
 
-                # self._save_images(self._wm_img_dir, self._tensor_to_pil(wm_imgs), names)
-                self._save_tensor(self._wm_img_dir, wm_imgs, names)
+            # self._save_images(self._wm_img_dir, self._tensor_to_pil(wm_imgs), names)
+            self._save_tensor(self._wm_img_dir, wm_imgs, img_names)
 
-                message_dict.update(dict(zip(names, messages.tolist())))
+            message_dict.update(dict(zip(img_names, messages.tolist())))
             bar.update(len(imgs))
 
         with open(os.path.join(self._waves_cache_folder, 'secret.json'), 'w', encoding='utf-8') as f:

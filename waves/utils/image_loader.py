@@ -10,16 +10,18 @@ from torchvision import transforms
 import torchvision.transforms.functional as F
 
 class ImageData(Dataset):
-    def __init__(self, path: str, ext: str = 'png', n_image: int | None = None):
+    def __init__(self, path: str, ext: str = 'png', n_image: int | None = None, return_secret: bool = True):
         self._path = path
         self._data = sorted([
             file for file in os.listdir(path) if file.endswith(ext)
         ])[:n_image]
         self._ext = ext
 
-        secret_path = os.path.join(path, '..', 'secret.json')
-        with open(secret_path, mode='r', encoding='utf-8') as f:
-            self._secret = json.load(f)
+        self._secret = None
+        if return_secret:
+            secret_path = os.path.join(path, '..', 'secret.json')
+            with open(secret_path, mode='r', encoding='utf-8') as f:
+                self._secret = json.load(f)
 
     def __len__(self):
         return len(self._data)
@@ -37,7 +39,8 @@ class ImageData(Dataset):
             img = None
 
         name = self._data[idx].split('.')[0]
-        return img, name, torch.tensor(self._secret[name])
+        secret = None if self._secret is None else torch.tensor(self._secret[name])
+        return img, name, secret
 
 class NPCFImageData(Dataset):
     def __init__(self, path: str, data: str = 'watermarked_no_lpips_std_9.pt', key: str = 'key_no_lpips_std_9.pt'):
