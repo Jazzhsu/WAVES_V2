@@ -4,7 +4,7 @@ from waves.waves_benchmark import WavesBenchmark
 from waves.attacks import AttackMethods
 import numpy as np
 
-""" A naive watermarking algorithm that marks the paints 200x200 block of the images white.
+""" A naive watermarking algorithm that marks the paints the center 100x100 block of the images white.
 """
 class MyWatermarker(Watermarker):
     def __init__(self):

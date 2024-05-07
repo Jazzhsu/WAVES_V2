@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Union, Optional
+from typing import Union, Tuple
 from enum import Enum
 
-from PIL import Image
+import torch
 
 class WatermarkerType(Enum):
     POST_PROCESS = 0
@@ -23,7 +23,12 @@ class Watermarker(ABC):
         return self._type
 
     @abstractmethod
-    def encode(self, images: Optional[list[Image.Image]], prompts: list[str], messages: list[list[Union[bool, float]]]) -> tuple[list[Image.Image], list[Image.Image]]:
+    def encode(
+        self, 
+        images: torch.Tensor, 
+        prompts: list[str], 
+        messages: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Encode message into given (image, prompt) or encode message into given prompt if the
         algorithm is in process watermarking.
 
@@ -42,7 +47,7 @@ class Watermarker(ABC):
         ...
 
     @abstractmethod
-    def decode(self, images: list[Image.Image]) -> list[list[Union[bool, float]]]:
+    def decode(self, images: torch.Tensor) -> torch.Tensor:
         """ Decode messages from a list of images.
 
         Args:
@@ -54,7 +59,7 @@ class Watermarker(ABC):
         ...
 
     @abstractmethod
-    def generate_messages(self, num_message: int) -> list[list[Union[bool, float]]]:
+    def generate_messages(self, num_message: int) -> torch.Tensor:
         """ Generate `num_message` messages.
 
         Args:

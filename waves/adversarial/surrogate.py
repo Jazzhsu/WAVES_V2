@@ -9,182 +9,112 @@ from torchvision.models import resnet18
 from torchattacks.attack import Attack
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.functional as F
+from tqdm import tqdm
 
 EPS_FACTOR = 1 / 255
 ALPHA_FACTOR = 0.05
 N_STEPS = 200
 BATCH_SIZE = 4
 
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="PGD Attack on the surrogate clasifier."
-    )
-    parser.add_argument(
-        "--attack_name",
-        type=str,
-        default="unwm_wm",
-        choices=["unwm_wm", "real_wm", "wm1_wm2"],
-        help="Three adversarial surrogate detector attacks tested in the paper.",
-    )
-    parser.add_argument(
-        "--watermark_name",
-        type=str,
-        default="tree_ring",
-        choices=["tree_ring", "stable_sig", "stegastamp"],
-    )
-    parser.add_argument(
-        "--strength",
-        type=float,
-        default=2,
-        choices=[2, 4, 6, 8],
-        help="The perturbation radius of adversarial attacks. It will be divided by 255 in the code.",
-    )
-    parser.add_argument(
-        "--target_label",
-        type=int,
-        default=0,
-        choices=[0, 1],
-        help="The target label for PGD targeted-attack. Labels are the ones used in surrogate model training. "
-        "For umwm_wm, 0 is non-watermarked, 1 is watermarked. To remove watermarks, the target_label should be 0.",
-    )
-
-    parsed_args = parser.parse_args()
-
-    parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
-    return parsed_args
-
 STRENGTH = [2, 4, 6, 8]
 
-def adv_surrogate_model_attack(
-    data_path,
-    model_path,
-    strength,
-    output_path,
-    batch_size=64,
-    warmup=True,
-    device=torch.device("cuda:0"),
-):
-    # check if the file/directory paths exist
-    for path in [data_path, model_path, output_path]:
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"The path does not exist: {path}")
+class MyModel(nn.Module):
+    def __init__(self):
+        super().__init__()
 
-    strength = min(int(strength * len(STRENGTH)), len(STRENGTH) - 1)
-    strength = STRENGTH[strength]
+        self._convs = nn.Sequential(
+            nn.Conv2d(3, 32, 3, 1, 1),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2),
+            nn.Dropout(0.25),
 
-    # load surrogate model
-    model = resnet18(pretrained=False)
-    model.fc = nn.Linear(model.fc.in_features, 2)  # Binary classification: 2 classes
-    save_path_full = os.path.join(model_path)
-    model.load_state_dict(torch.load(save_path_full))
-    model = model.to(device)
-    model.eval()
-    print("Model loaded!")
+            nn.Conv2d(32, 64, 3, 1, 1),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2),
+            nn.Dropout(0.25),
 
-    # load data
-    transform = transforms.Compose([
-        # transforms.Resize((256, 256)),
-        transforms.ToTensor(),
-    ])
-    dataset = SimpleImageFolder(data_path, transform=transform)
-    train_loader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True
-    )
-    test_loader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True
-    )
-    print("Data loaded!")
+            nn.Conv2d(64, 128, 3, 1, 1),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2),
+        )
 
-    # warm up
-    if warmup:
-        # Warmup to get the average delta for the attack
-        average_delta_list = []
-        attack_warmup = pgd_attack_classifier(
-            model=model,
+        self._ffn = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128 * 50 * 50, 512),
+            nn.LeakyReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, 100),
+        )
+
+    def forward(self, x):
+        x = self._convs(x)
+        x = self._ffn(x)
+        return x
+
+class AdversarialSurrogateAttacker:
+    def __init__(self, model_path: str, strength: float, model_input_size: int = 256, device = torch.device('cuda')):
+        # Load classifier
+        # self._model = resnet18(pretrained=False)
+        # self._model.fc = nn.Linear(self._model.fc.in_features, 2)  # Binary classification: 2 classes
+        # self._model.load_state_dict(torch.load(model_path))
+        # self._model = self._model.to(device)
+        # self._model.eval()
+        self._model = MyModel()
+        self._model.load_state_dict(torch.load(model_path))
+        self._model = self._model.to(device)
+        self._model.eval()
+
+        self._device = device
+        self._cls_input_size = [model_input_size, model_input_size]
+
+        strength = min(int(strength * len(STRENGTH)), len(STRENGTH) - 1)
+        strength = STRENGTH[strength]
+        self._strength = strength
+        self._init_delta = None
+
+        self._attacker = pgd_attack_classifier(
+            model=self._model,
             eps=EPS_FACTOR * strength,
             alpha=ALPHA_FACTOR * EPS_FACTOR * strength,
             steps=N_STEPS,
-            random_start=True,
+            model_input_size=self._cls_input_size,
         )
-        for i, (images, image_paths) in enumerate(train_loader):
-            images = images.to(device)
-            target_labels = 1 - model(images).argmax(dim=1)
+
+    def warmup(self, data_set: Dataset):
+        loader = DataLoader(data_set, batch_size=64, shuffle=True, num_workers=4)
+
+        average_deltas = []
+        for i, (images, _) in tqdm(enumerate(loader), desc='Warm up'):
+            images = images.to(self._device)
+            target_labels = 1 - self._model(F.resize(images, self._cls_input_size)).argmax(dim=1)
 
             # Attack images
-            images_adv = attack_warmup(images, target_labels, init_delta=None)
+            images_adv = self._attacker(images, target_labels, init_delta=None)
 
-            average_delta_list.append((images_adv - images).mean(dim=0))
+            average_deltas.append((images_adv - images).mean(dim=0))
 
             if i >= 20:
                 break
 
-        average_delta = torch.cat(average_delta_list, dim=0).mean(dim=0)
+        self._init_delta = torch.cat(average_deltas, dim=0).mean(dim=0)
 
-        print("Warmup finished!")
-    else:
-        average_delta = None
+    def attack(self, imgs: torch.Tensor):
+        imgs = imgs.to(self._device)
+        target_labels = 1 - torch.round(
+                                torch.nn.functional.sigmoid(self._model(F.resize(imgs, self._cls_input_size))))
 
-    # Generate adversarial images
-    attack = pgd_attack_classifier(
-        model=model,
-        eps=EPS_FACTOR * strength,
-        alpha=ALPHA_FACTOR * EPS_FACTOR * strength,
-        steps=N_STEPS,
-        random_start=False if warmup else True,
-    )
-    for i, (images, image_paths) in enumerate(test_loader):
-        images = images.to(device)
-        target_labels = 1 - model(images).argmax(dim=1)
-
-        # PGD attack
-        images_adv = attack(images, target_labels, init_delta=average_delta)
-
-        # save images
-        for img_adv, image_path in zip(images_adv, image_paths):
-            save_path = os.path.join(output_path, os.path.basename(image_path))
-            save_image(img_adv, save_path)
-
-    print("Attack finished!")
-    return
-
-
-class SimpleImageFolder(Dataset):
-    def __init__(self, root, transform=None, extensions=None):
-        if extensions is None:
-            extensions = [".jpg", ".jpeg", ".png"]
-        self.root = root
-        self.transform = transform
-        self.extensions = extensions
-
-        # Load filenames from the root
-        self.filenames = [
-            os.path.join(root, f)
-            for f in os.listdir(root)
-            if os.path.isfile(os.path.join(root, f))
-            and os.path.splitext(f)[1].lower() in self.extensions
-        ]
-
-    def __getitem__(self, index):
-        image_path = self.filenames[index]
-        image = Image.open(image_path).convert("RGB")
-        if self.transform is not None:
-            image = self.transform(image)
-        return image, image_path  # return image path to identify the image file later
-
-    def __len__(self):
-        return len(self.filenames)
-
+        # Attack images
+        return self._attacker(imgs, target_labels, init_delta=self._init_delta).detach().cpu()
 
 class WarmupPGD(Attack):
-    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, random_start=True):
+    def __init__(self, model, eps=8 / 255, alpha=2 / 255, steps=10, model_input_size=[256, 256]):
         super().__init__("PGD", model)
         self.eps = eps
         self.alpha = alpha
         self.steps = steps
-        self.random_start = random_start
         self.supported_mode = ["default", "targeted"]
         self.loss = nn.CrossEntropyLoss()
+        self._cls_size = model_input_size
 
     def forward(self, images, labels, init_delta=None):
         """
@@ -198,24 +128,24 @@ class WarmupPGD(Attack):
         if self.targeted:
             target_labels = self.get_target_label(images, labels)
 
-        if self.random_start:
+        if init_delta is None:
             adv_images = images.clone().detach()
             # Starting at a uniformly random point
             adv_images = adv_images + torch.empty_like(adv_images).uniform_(
                 -self.eps, self.eps
             )
             adv_images = torch.clamp(adv_images, min=0, max=1).detach()
-        elif init_delta is not None:
+        else:
             clamped_delta = torch.clamp(init_delta, min=-self.eps, max=self.eps)
             adv_images = images.clone().detach() + clamped_delta
             adv_images = torch.clamp(adv_images, min=0, max=1).detach()
-        else:
-            assert False
+
 
         for _ in range(self.steps):
             self.model.zero_grad()
             adv_images.requires_grad = True
-            outputs = self.get_logits(adv_images)
+            outputs = self.model(F.resize(adv_images, self._cls_size))
+            outputs = torch.nn.functional.sigmoid(outputs)
 
             # Calculate loss
             if self.targeted:
@@ -232,17 +162,23 @@ class WarmupPGD(Attack):
             delta = torch.clamp(adv_images - images, min=-self.eps, max=self.eps)
             adv_images = torch.clamp(images + delta, min=0, max=1).detach()
 
+        # delta = torch.zeros_like(images, requires_grad=True, device='cuda')
+        # optimizer = torch.optim.Adam([delta], lr=0.0001)
+        # for _ in range(self.steps):
+        #     optimizer.zero_grad()
+
+        #     outputs = torch.nn.functional.sigmoid(self.model(torch.clamp(images + delta, 0, 1)))
         return adv_images
 
 
-def pgd_attack_classifier(model, eps, alpha, steps, random_start=True):
+def pgd_attack_classifier(model, eps, alpha, steps, model_input_size):
     # Create an instance of the attack
     attack = WarmupPGD(
         model,
         eps=eps,
         alpha=alpha,
         steps=steps,
-        random_start=random_start,
+        model_input_size=model_input_size
     )
 
     # Set targeted mode

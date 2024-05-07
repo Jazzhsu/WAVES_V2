@@ -1,6 +1,7 @@
+import numpy as np
 from PIL import Image
 import torch
-from torchvision import transforms
+import torchvision.transforms.functional as F
 
 
 # Normalize image tensors
@@ -48,19 +49,16 @@ def to_tensor(images, norm_type="naive"):
     assert isinstance(images, list) and all(
         [isinstance(image, Image.Image) for image in images]
     )
-    images = torch.stack([transforms.ToTensor()(image) for image in images])
-    if norm_type is not None:
-        images = normalize_tensor(images, norm_type)
+    images = torch.stack([
+        F.to_tensor(image) 
+        for image in images
+    ])
     return images
 
 
 # Unnormalize tensors and convert to PIL images
 def to_pil(images, norm_type="naive"):
-    assert isinstance(images, torch.Tensor)
-    if norm_type is not None:
-        images = unnormalize_tensor(images, norm_type).clamp(0, 1)
-    return [transforms.ToPILImage()(image) for image in images.cpu()]
-
+    return [Image.fromarray((image * 255.).permute(1, 2, 0).numpy().astype(np.uint8)) for image in images.cpu()]
 
 # Renormalize image tensors
 def renormalize_tensor(images, in_norm_type=None, out_norm_type=None):

@@ -1,14 +1,21 @@
 from enum import IntFlag, auto
 import os
 from typing import Optional
+import json
 
+import torch
+import torchvision.transforms.functional as F
+import numpy as np
 from PIL import Image
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from .utils.image_loader import ImageLoader
+from .utils.image_loader import ImageLoader, ImageData, NPCFImageData
 from .distortions import distortions
 from .regeneration.regen import RegenDiffusionAttacker, VAEAttacker
-from .adversarial.embedding import adv_emb_attack
-from .adversarial.surrogate import adv_surrogate_model_attack
+from .adversarial.embedding import AdversarialEmbeddingAttacker
+from .adversarial.surrogate import AdversarialSurrogateAttacker
+from .watermarker import Watermarker
 
 class AttackMethods(IntFlag):
     # Distortion attacks
@@ -85,60 +92,92 @@ def _is_regen_diffution_attack(attack: AttackMethods):
 def _is_adversarial_emb_attack(attack: AttackMethods):
     return attack.name.startswith('ADV_EMB_')
 
-def _save_images(imgs: list[Image.Image], dir: str, start_idx: int):
-    for i, img in enumerate(imgs):
-        img.save(os.path.join(dir, f'{start_idx + i:08d}.png'))
+# def _save_images(imgs: list[Image.Image], dir: str, start_idx: int):
+#     for i, img in enumerate(imgs):
+#         img.save(os.path.join(dir, f'{start_idx + i:08d}.png'))
 
-def _distortion_attack(wm_img_dir: str, out_dir: str, attack_methods: list[AttackMethods], attack_strength: float):
+def _distortion_attack(wm_img_dir: str, out_dir: str, attack_methods: list[AttackMethods], attack_strength: float, decoder: Watermarker):
     if isinstance(attack_methods, AttackMethods):
         attack_methods = [attack_methods]
 
-    image_loader = ImageLoader(wm_img_dir)
-    img_idx = 0
-    while image_loader.has_next():
-        images = image_loader.load_batch(DIST_BATCH_SIZE)
+    bits_diff = 0
+    total_bits = 0
 
+    img_data = ImageData(wm_img_dir, ext='pt', n_image=100)
+    # img_data = NPCFImageData(wm_img_dir)
+    loader = DataLoader(img_data, batch_size=32, shuffle=False, num_workers=4)
+    bar = tqdm(total=len(img_data))
+    for images, names, secrets in loader:
+        images = images.clamp(0, 1)
         for attack in attack_methods:
-            images = distortions.apply_distortion(images, attack_map[attack], attack_strength)
+            images = distortions.apply_distortion(images, attack_map[attack], attack_strength, return_image=False)
 
-        _save_images(images, out_dir, img_idx)
-        img_idx += len(images)
+        result = decoder.decode(images)
+        bits_diff += (torch.abs(secrets - result)).sum().item()
+        total_bits += secrets.shape[0] * secrets.shape[1]
+        _save_images(out_dir, _tensor_to_pil(images), range(len(images)))
+        bar.update(len(images))
 
-def _regeneration_attack(wm_img_dir: str, out_dir: str, attack_method: AttackMethods, attack_strength: float):
-    image_loader = ImageLoader(wm_img_dir)
-    img_idx = 0
+    print(f'ber = {bits_diff}/{total_bits}')
 
-    regen_attacker = None
+def _regeneration_attack(wm_img_dir: str, out_dir: str, attack_method: AttackMethods, attack_strength: float, decoder: Watermarker, surrogate_model_path: str | None = None):
+    img_data = ImageData(wm_img_dir, ext='pt', n_image=100)
+    # img_data = NPCFImageData(wm_img_dir)
+    loader = DataLoader(img_data, batch_size=2, shuffle=True)
+
+    attacker = None
     if _is_regen_diffution_attack(attack_method):
-        regen_attacker = RegenDiffusionAttacker(attack_strength, repeats[attack_method])
-    else:
-        regen_attacker = VAEAttacker(attack_strength)
-
-    while image_loader.has_next():
-        images = image_loader.load_batch(DIST_BATCH_SIZE)
-        images = regen_attacker.attack(images)
-
-        _save_images(images, out_dir, img_idx)
-        img_idx += len(images)
-
-def attack(wm_img_dir: str, out_dir: str, attack_method: AttackMethods, attack_strength: float, surrogate_model_path: Optional[str] = None):
-    # Restrict strength to [0.0, 1.0]
-    attack_strength = min(1.0, max(0.0, attack_strength))
-
-    if _is_distortion_attack(attack_method):
-        _distortion_attack(wm_img_dir, out_dir, _get_attacks(attack_method), attack_strength)
-
-    elif attack_method == AttackMethods.REGEN_VAE or _is_regen_diffution_attack(attack_method):
-        _regeneration_attack(wm_img_dir, out_dir, attack_method, attack_strength)
-
+        attacker = RegenDiffusionAttacker(attack_strength, repeats[attack_method])
     elif _is_adversarial_emb_attack(attack_method):
-        adv_emb_attack(wm_img_dir, adv_emb_map[attack_method], attack_strength, out_dir)
-
+        attacker = AdversarialEmbeddingAttacker(adv_emb_map[attack_method], attack_strength)
     elif attack_method == AttackMethods.ADV_SURROGATE:
-        adv_surrogate_model_attack(wm_img_dir, model_path=surrogate_model_path, strength=attack_strength, output_path=out_dir)
+
+        if surrogate_model_path is None:
+            raise ValueError('Missing surrogate model path')
+
+        attacker = AdversarialSurrogateAttacker(surrogate_model_path, attack_strength, 400)
+        # attacker.warmup(img_data)
+    else:
+        attacker = VAEAttacker(attack_strength)
+
+    bits_diff = 0
+    total_bits = 0
+
+    bar = tqdm(total=len(img_data))
+    for imgs, names, secrets in loader:
+        imgs = imgs.clamp(0, 1)
+        attacked_imgs = attacker.attack(imgs.float())
+        result = decoder.decode(attacked_imgs) 
+
+        bits_diff += (torch.abs(result - secrets)).sum().item()
+        total_bits += secrets.shape[0] * secrets.shape[1]
+
+        # TODO: save?
+        _save_images(out_dir, _tensor_to_pil(attacked_imgs), names)
+
+        bar.update(len(imgs))
+
+    print(f'ber = {bits_diff}/{total_bits}')
+
+def attack(
+    wm_img_dir: str, 
+    out_dir: str, 
+    attack_method: AttackMethods, 
+    attack_strength: float, 
+    decoder: Watermarker,
+    surrogate_model_path: str | None = None
+):
+    if _is_distortion_attack(attack_method):
+        _distortion_attack(wm_img_dir, out_dir, _get_attacks(attack_method), attack_strength, decoder)
 
     else:
-        raise ValueError(f'Unknown attack: {attack_method}.')
+        _regeneration_attack(wm_img_dir, out_dir, attack_method, attack_strength, decoder, surrogate_model_path)
 
+def _tensor_to_pil(imgs: torch.Tensor) -> list[Image.Image]:
+    np_imgs = np.round(imgs.permute(0, 2, 3, 1).numpy() * 255.).astype(np.uint8)
+    return [ Image.fromarray(img) for img in np_imgs ]
 
+def _save_images(path: str, images: list[Image.Image], images_names):
+    for img, name in zip(images, images_names):
+        img.save(os.path.join(path, f'{name}.png'))
 

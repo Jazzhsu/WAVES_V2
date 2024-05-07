@@ -154,3 +154,8 @@ wandb
 image_data
 images
 test_image
+
+models
+result
+npcf_result
+pix2pix

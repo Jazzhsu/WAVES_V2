@@ -91,7 +91,7 @@ def apply_single_distortion(image, distortion_type, strength=None, distortion_se
             if strength is not None
             else random.uniform(*distortion_strength_paras["rotation"])
         )
-        distorted_image = F.rotate(image, angle)
+        distorted_image = image.rotate(angle) # F.rotate(image, angle)
 
     elif distortion_type == "resizedcrop":
         scale = (
@@ -99,10 +99,13 @@ def apply_single_distortion(image, distortion_type, strength=None, distortion_se
             if strength is not None
             else random.uniform(*distortion_strength_paras["resizedcrop"])
         )
-        i, j, h, w = T.RandomResizedCrop.get_params(
-            image, scale=(scale, scale), ratio=(1, 1)
-        )
-        distorted_image = F.resized_crop(image, i, j, h, w, image.size)
+        # i, j, h, w = T.RandomResizedCrop.get_params(
+        #     image, scale=(scale, scale), ratio=(1, 1)
+        size = int(image.size[0] * 0.9)
+        i, j, h, w = T.RandomCrop.get_params(image, output_size=(size, size))
+        # distorted_image = F.resized_crop(image, i, j, h, w, image.size)
+        crop = T.CenterCrop(size=512)
+        distorted_image = F.crop(image, i, j, h, w)
 
     elif distortion_type == "erasing":
         scale = (
