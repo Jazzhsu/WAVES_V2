@@ -15,7 +15,7 @@ distortion_strength_paras = dict(
     erasing=(0, 0.25),
     brightness=(1, 2),
     contrast=(1, 2),
-    blurring=(0, 20),
+    blurring=(0, 10),
     noise=(0, 0.1),
     compression=(90, 10),
 )
@@ -104,7 +104,6 @@ def apply_single_distortion(image, distortion_type, strength=None, distortion_se
         size = int(image.size[0] * 0.9)
         i, j, h, w = T.RandomCrop.get_params(image, output_size=(size, size))
         # distorted_image = F.resized_crop(image, i, j, h, w, image.size)
-        crop = T.CenterCrop(size=512)
         distorted_image = F.crop(image, i, j, h, w)
 
     elif distortion_type == "erasing":

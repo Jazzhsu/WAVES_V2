@@ -103,8 +103,12 @@ def _distortion_attack(wm_img_dir: str, out_dir: str, attack_methods: list[Attac
     bits_diff = 0
     total_bits = 0
 
+    # stegastamp data
     img_data = ImageData(wm_img_dir, ext='pt', n_image=100)
+
+    # npcf data
     # img_data = NPCFImageData(wm_img_dir)
+
     loader = DataLoader(img_data, batch_size=32, shuffle=False, num_workers=4)
     bar = tqdm(total=len(img_data))
     for images, names, secrets in loader:
@@ -115,14 +119,22 @@ def _distortion_attack(wm_img_dir: str, out_dir: str, attack_methods: list[Attac
         result = decoder.decode(images)
         bits_diff += (torch.abs(secrets - result)).sum().item()
         total_bits += secrets.shape[0] * secrets.shape[1]
-        _save_images(out_dir, _tensor_to_pil(images), range(len(images)))
+
+        # TODO: save image?
+        # _save_images(out_dir, _tensor_to_pil(images), names)
+
         bar.update(len(images))
 
-    print(f'ber = {bits_diff}/{total_bits}')
+    print(f'{attack_methods} ber = {bits_diff}/{total_bits}')
 
 def _regeneration_attack(wm_img_dir: str, out_dir: str, attack_method: AttackMethods, attack_strength: float, decoder: Watermarker, surrogate_model_path: str | None = None):
+
+    # stegastamp data
     img_data = ImageData(wm_img_dir, ext='pt', n_image=100)
+
+    # npcf data
     # img_data = NPCFImageData(wm_img_dir)
+
     loader = DataLoader(img_data, batch_size=2, shuffle=True)
 
     attacker = None
@@ -157,7 +169,7 @@ def _regeneration_attack(wm_img_dir: str, out_dir: str, attack_method: AttackMet
 
         bar.update(len(imgs))
 
-    print(f'ber = {bits_diff}/{total_bits}')
+    print(f'{attack_method} ber = {bits_diff}/{total_bits}')
 
 def attack(
     wm_img_dir: str, 

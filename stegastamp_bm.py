@@ -77,7 +77,9 @@ if __name__ == '__main__':
     stega_stamp = StegaStamp('./models/stega_stamp.onnx', batch_size=128)
     benchmark = WavesBenchmark(stega_stamp, './image_data', './result')
 
-    benchmark.generate_attack_images(AttackMethods.COMB_DIST_ALL ^ AttackMethods.DIST_RESIZE_CROP, 0.2)
+    for attack in AttackMethods:
+        if 'DIST' in attack.name:
+            benchmark.generate_attack_images(attack, 0.2)
 
     # benchmark.generate_wm_images()
     # with open('./result/waves/secret.json', 'r') as f:

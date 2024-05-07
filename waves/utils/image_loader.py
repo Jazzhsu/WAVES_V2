@@ -40,7 +40,7 @@ class ImageData(Dataset):
         return img, name, torch.tensor(self._secret[name])
 
 class NPCFImageData(Dataset):
-    def __init__(self, path: str, data: str = 'watermarked_no_lpips_std_12.pt', key: str = 'key_no_lpips_std_12.pt'):
+    def __init__(self, path: str, data: str = 'watermarked_no_lpips_std_9.pt', key: str = 'key_no_lpips_std_9.pt'):
         self._image_data = torch.load(os.path.join(path, data), map_location='cpu')
         self._key = torch.load(os.path.join(path, key))
 
@@ -50,7 +50,7 @@ class NPCFImageData(Dataset):
     def __getitem__(self, idx: int):
         img_name = list(self._image_data)[idx]
 
-        return self._image_data[img_name].squeeze(0), torch.tensor(self._key[img_name])
+        return self._image_data[img_name].squeeze(0), img_name, torch.tensor(self._key[img_name])
 
 class SurrogateImageData(Dataset):
     def __init__(

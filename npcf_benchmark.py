@@ -3,10 +3,10 @@ import torch
 import torch.nn.functional as F
 from sklearn.cluster import KMeans
 from diffusers import AutoencoderKL, StableDiffusionPipeline
+import diffusers.utils.logging as logging
 from tqdm import tqdm
 from peft import load_peft_weights, set_peft_model_state_dict, LoraConfig, get_peft_model
 
-from conditional_BDIA_pipeline import BDIA_DDIM_pipeline
 from waves.waves_benchmark import WavesBenchmark
 from waves.watermarker import Watermarker, WatermarkerType
 from waves.attacks import AttackMethods
@@ -46,8 +46,6 @@ def _get_ring_correlations(imgs: torch.Tensor, kernels: torch.Tensor, ga_kernel:
 class NPCF(Watermarker):
     def __init__(self, batch_size: int = 16):
         super().__init__(batch_size=batch_size, type=WatermarkerType.POST_PROCESS)
-
-
         self._kernel = get_ring_kernels(33, 8).float()
 
     def load_pipe(self):
@@ -110,7 +108,11 @@ class NPCF(Watermarker):
         raise NotImplementedError()
 
 if __name__ == '__main__':
+    logging.disable_progress_bar()
+
     npcf = NPCF()
     benchmark = WavesBenchmark(npcf, image_src='.', cache_folder='./npcf_result/')
 
-    benchmark.generate_attack_images(AttackMethods.COMB_DIST_ALL ^ AttackMethods.DIST_ERASE ^ AttackMethods.DIST_RESIZE_CROP ^ AttackMethods.DIST_ROTATION ^ AttackMethods.DIST_CONTRAST ^ AttackMethods.DIST_BRIGHT, 0.2)
+    for attack in AttackMethods:
+        if 'DIST' in attack.name:
+            benchmark.generate_attack_images(attack, 0.2)
